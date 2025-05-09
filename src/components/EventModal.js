@@ -6,33 +6,36 @@ import ActionButton from './ActionButton';
 
 const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEvents, onSave, initialEvent = null }) => {
   const [eventName, setEventName] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
   const [selectedEvents, setSelectedEvents] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAvailableEvents, setShowAvailableEvents] = useState(false);
-  
+
   // 初始化编辑状态
   useEffect(() => {
     if (initialEvent) {
       setEventName(initialEvent.name || '');
+      setEventDescription(initialEvent.description || '');
       setSelectedEvents(initialEvent.events || []);
     } else {
       setEventName('');
+      setEventDescription('');
       setSelectedEvents([]);
     }
   }, [initialEvent, isOpen]);
-  
+
   // 过滤可用事件，排除已选择的事件
-  const filteredAvailableEvents = availableEvents.filter(event => 
+  const filteredAvailableEvents = availableEvents.filter(event =>
     event.toLowerCase().includes(searchQuery.toLowerCase()) &&
     !selectedEvents.includes(event)
   );
-  
+
   // 当Modal打开时，初始化拖拽功能
   useEffect(() => {
     if (isOpen) {
       // 已选事件列表
       const selectedEventsEl = document.getElementById('selectedEvents');
-      
+
       if (selectedEventsEl) {
         // 初始化已选事件列表的拖拽
         new Sortable(selectedEventsEl, {
@@ -48,150 +51,156 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
       }
     }
   }, [isOpen]);
-  
+
   const handleNameChange = (e) => {
     setEventName(e.target.value);
   };
-  
+
+  const handleDescriptionChange = (e) => {
+    setEventDescription(e.target.value);
+  };
+
   const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value);
+    const value = e.target.value;
+    setSearchQuery(value);
     setShowAvailableEvents(true);
   };
-  
-  const handleEventSelect = (event) => {
-    if (!selectedEvents.includes(event)) {
-      setSelectedEvents([...selectedEvents, event]);
-      setSearchQuery('');
+
+  const handleSearchBlur = () => {
+    // 延迟隐藏下拉列表，以便用户能够点击选项
+    setTimeout(() => {
       setShowAvailableEvents(false);
-    }
+    }, 200);
   };
-  
-  const handleRemoveEvent = (index) => {
-    const newEvents = [...selectedEvents];
-    newEvents.splice(index, 1);
-    setSelectedEvents(newEvents);
+
+  const handleSearchFocus = () => {
+    setShowAvailableEvents(true);
   };
-  
-  const handleSave = () => {
-    if (eventName.trim() && selectedEvents.length > 0) {
-      onSave({
-        name: eventName,
-        events: selectedEvents
-      });
-      resetForm();
-    }
-  };
-  
-  const resetForm = () => {
-    setEventName('');
-    setSelectedEvents([]);
+
+  const handleEventSelect = (event) => {
+    setSelectedEvents([...selectedEvents, event]);
     setSearchQuery('');
     setShowAvailableEvents(false);
+  };
+
+  const handleRemoveEvent = (eventToRemove) => {
+    setSelectedEvents(selectedEvents.filter(event => event !== eventToRemove));
+  };
+
+  const handleSave = () => {
+    if (!eventName.trim()) {
+      alert('请输入事件名称');
+      return;
+    }
+
+    onSave({
+      name: eventName,
+      description: eventDescription,
+      events: selectedEvents
+    });
+
     onClose();
   };
-  
-  const toggleAvailableEvents = () => {
-    setShowAvailableEvents(!showAvailableEvents);
-    if (!showAvailableEvents) {
-      setSearchQuery('');
-    }
-  };
-  
-  // 如果Modal没有打开，不渲染任何内容
+
   if (!isOpen) return null;
-  
-  // 使用Portal将Modal渲染到body最后
+
   return ReactDOM.createPortal(
     <div className={styles.modal}>
       <div className={styles.modalContent}>
         <div className={styles.modalHeader}>
-          <div className={styles.modalTitle}>{title}</div>
+          <h2>{title}</h2>
           <button className={styles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>{nameLabel}</label>
-          <input 
-            type="text" 
-            className={styles.formInput} 
-            value={eventName}
-            onChange={handleNameChange}
-            placeholder={`请输入${nameLabel}`}
-          />
-        </div>
-        
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>{eventType}选择</label>
-          <div className={styles.searchContainer}>
-            <input 
-              type="text" 
-              className={styles.searchInput} 
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onFocus={() => setShowAvailableEvents(true)}
-              placeholder={`搜索${eventType}`}
+
+        <div className={styles.modalBody}>
+          <div className={styles.formGroup}>
+            <label>{nameLabel}</label>
+            <input
+              type="text"
+              value={eventName}
+              onChange={handleNameChange}
+              className={styles.formInput}
+              placeholder={`请输入${nameLabel}`}
             />
-            <button 
-              className={styles.searchToggle} 
-              onClick={toggleAvailableEvents}
-              title={showAvailableEvents ? "隐藏候选事件" : "显示候选事件"}
-            >
-              {showAvailableEvents ? "▲" : "▼"}
-            </button>
           </div>
-          
-          {showAvailableEvents && (
-            <div className={styles.eventsDropdown}>
-              {filteredAvailableEvents.length > 0 ? (
-                filteredAvailableEvents.map((event, index) => (
-                  <div 
-                    key={`available-${index}`} 
-                    className={styles.eventItem}
-                    onClick={() => handleEventSelect(event)}
-                  >
-                    {event}
+
+          {eventType === '标准事件' && (
+            <div className={styles.formGroup}>
+              <label>事件描述</label>
+              <textarea
+                value={eventDescription}
+                onChange={handleDescriptionChange}
+                className={styles.formInput}
+                placeholder="请输入事件描述"
+                rows="3"
+              />
+            </div>
+          )}
+
+          <div className={styles.formGroup}>
+            <label>{eventType}选择</label>
+            <div className={styles.searchContainer}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onFocus={handleSearchFocus}
+                onBlur={handleSearchBlur}
+                className={styles.searchInput}
+                placeholder={`搜索${eventType}`}
+              />
+            </div>
+
+            {showAvailableEvents && (
+              <div className={styles.eventsDropdown}>
+                {filteredAvailableEvents.length > 0 ? (
+                  filteredAvailableEvents.map((event, index) => (
+                    <div
+                      key={index}
+                      className={styles.eventItem}
+                      onClick={() => handleEventSelect(event)}
+                    >
+                      {event}
+                    </div>
+                  ))
+                ) : (
+                  <div className={styles.noEvents}>
+                    {searchQuery ? '没有找到匹配的事件' : '没有可用的事件'}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>已选择的{eventType}</label>
+            <div id="selectedEvents" className={styles.selectedEvents}>
+              {selectedEvents.length > 0 ? (
+                selectedEvents.map((event, index) => (
+                  <div key={index} className={styles.selectedEventItem}>
+                    <span className={styles.eventText}>{event}</span>
+                    <button
+                      className={styles.removeEventBtn}
+                      onClick={() => handleRemoveEvent(event)}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))
               ) : (
-                <div className={styles.noEvents}>
-                  {searchQuery ? `没有匹配"${searchQuery}"的${eventType}` : `没有可用的${eventType}`}
+                <div className={styles.noSelectedEvents}>
+                  请从上方选择{eventType}
                 </div>
               )}
             </div>
-          )}
-        </div>
-        
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>已选{eventType}</label>
-          <div className={styles.selectedEvents} id="selectedEvents">
-            {selectedEvents.map((event, index) => (
-              <div key={`selected-${index}`} className={styles.selectedEventItem}>
-                <span className={styles.eventText}>{event}</span>
-                <button 
-                  className={styles.removeEventBtn} 
-                  onClick={() => handleRemoveEvent(index)}
-                  title="移除"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
           </div>
-          {selectedEvents.length === 0 && (
-            <div className={styles.noSelectedEvents}>
-              请从上方搜索并选择{eventType}
-            </div>
-          )}
-          <small className="text-muted">提示：可自由拖动已选{eventType}来调整执行顺序</small>
         </div>
-        
+
         <div className={styles.modalFooter}>
-          <button className={styles.cancelButton} onClick={onClose}>取消</button>
-          <button 
-            className={styles.saveButton} 
-            onClick={handleSave}
-            disabled={!eventName.trim() || selectedEvents.length === 0}
-          >
+          <button className={styles.cancelButton} onClick={onClose}>
+            取消
+          </button>
+          <button className={styles.saveButton} onClick={handleSave}>
             保存
           </button>
         </div>
