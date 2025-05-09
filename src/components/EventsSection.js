@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import styles from '../styles/Bank.module.css';
 import ActionButton from './ActionButton';
 import EventModal from './EventModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
 
 const EventsSection = () => {
+  const [personalEvents, setPersonalEvents] = useState([]);
+  const [bankEvents, setBankEvents] = useState([]);
   const [searchPersonalText, setSearchPersonalText] = useState('');
   const [searchBankText, setSearchBankText] = useState('');
   const [showPersonalSearch, setShowPersonalSearch] = useState(false);
@@ -17,67 +19,85 @@ const EventsSection = () => {
   const [isBankDeleteModalOpen, setIsBankDeleteModalOpen] = useState(false);
   const [currentEditEvent, setCurrentEditEvent] = useState(null);
   const [currentDeleteEvent, setCurrentDeleteEvent] = useState(null);
-  const [personalEvents, setPersonalEvents] = useState([
-    'OTP启用设定变更_后将发生紧急处理',
-    '0411msg更新一括处理'
-  ]);
-  const [bankEvents, setBankEvents] = useState([
+  const [isLoading, setIsLoading] = useState(false);
+  const hasAttemptedFetch = useRef(false);
+
+  // 默认银行事件数据
+  const defaultBankEvents = [
     {
-      name: 'OTP启用设定变更',
-      description: '用于变更OTP启用设定的标准流程',
-      events: ['既存信息查询', 'BL检证-等式检证']
-    },
-    {
-      name: 'OTP停止设定变更',
-      description: '用于变更OTP停止设定的标准流程',
-      events: ['既存信息变更']
-    },
-    {
-      name: '设信master数据导出',
-      description: '导出设信master数据的标准流程',
-      events: ['既存信息查询']
-    },
-    {
-      name: '设定值变更',
-      description: '变更系统设定值的标准流程',
-      events: []
-    },
-    {
-      name: 'Msg文言变更',
-      description: '变更系统消息文言的标准流程',
-      events: ['既存信息变更', 'BL检证-范围检证']
+      id: 1,
+      eventName: "OTP開始",
+      description: "ユーザOTP開始",
+      pevents: [
+        {
+          id: 1,
+          eventName: "OTP検索",
+          description: "ユーザOTP検索",
+          parameters: "usrid",
+          pevents: "/bank/transfer"
+        },
+        {
+          id: 2,
+          eventName: "OTP更新",
+          description: "ユーザOTP更新",
+          parameters: "usrid",
+          pevents: "/bank/transfer"
+        }
+      ]
     }
-  ]);
-  // 定义标准事件，但不提供修改方法，因为标准事件是基础组件
-  const standardEvents = [
-    '既存信息查询',
-    '既存信息变更',
-    'BL检证-等式检证',
-    'BL检证-范围检证'
   ];
 
+  // 从API获取银行事件数据
+  useEffect(() => {
+    const fetchBankEvents = async () => {
+      // 如果已经尝试过获取数据，直接使用默认数据
+      if (hasAttemptedFetch.current) {
+        setBankEvents(defaultBankEvents);
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        // 创建一个超时Promise
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('请求超时')), 3000);
+        });
+
+        // 创建实际的API请求Promise
+        const fetchPromise = fetch('http://9.197.76.157:8080/api/events/bank');
+
+        // 使用Promise.race来竞争，谁先完成就用谁的结果
+        const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+        if (!response.ok) {
+          throw new Error('API请求失败');
+        }
+
+        const data = await response.json();
+        setBankEvents(data);
+      } catch (err) {
+        // 静默失败，直接使用默认数据
+        setBankEvents(defaultBankEvents);
+      } finally {
+        setIsLoading(false);
+        hasAttemptedFetch.current = true;
+      }
+    };
+
+    fetchBankEvents();
+  }, []); // 空依赖数组，只在组件挂载时执行一次
+
   // 保存事件组合信息（事件名称到组成它的事件的映射）
-  const [eventCompositions, setEventCompositions] = useState({
-    // 初始示例数据
-    'OTP启用设定变更_后将发生紧急处理': ['OTP启用设定变更', 'Msg文言变更'],
-    '0411msg更新一括处理': ['Msg文言变更'],
-    'OTP启用设定变更': ['既存信息查询', 'BL检证-等式检证'],
-    'OTP停止设定变更': ['既存信息变更'],
-    '设信master数据导出': ['既存信息查询'],
-    'Msg文言变更': ['既存信息变更', 'BL检证-范围检证']
-  });
+  const [eventCompositions, setEventCompositions] = useState({});
 
   // 从本地存储加载事件列表和组合信息
   useEffect(() => {
     const savedPersonalEvents = localStorage.getItem('personalEvents');
-    const savedBankEvents = localStorage.getItem('bankEvents');
     const savedEventCompositions = localStorage.getItem('eventCompositions');
 
     if (savedPersonalEvents) {
       setPersonalEvents(JSON.parse(savedPersonalEvents));
-    }
-    if (savedBankEvents) {
-      setBankEvents(JSON.parse(savedBankEvents));
     }
     if (savedEventCompositions) {
       setEventCompositions(JSON.parse(savedEventCompositions));
@@ -95,7 +115,7 @@ const EventsSection = () => {
   );
 
   const filteredBankEvents = bankEvents.filter(event =>
-    event.name.toLowerCase().includes(searchBankText.toLowerCase())
+    event.eventName.toLowerCase().includes(searchBankText.toLowerCase())
   );
 
   // 搜索相关处理函数
@@ -140,9 +160,11 @@ const EventsSection = () => {
 
   // 编辑功能相关处理函数
   const openPersonalEditModal = (eventName) => {
+    const composition = eventCompositions[eventName] || { events: [], parameters: "" };
     setCurrentEditEvent({
       name: eventName,
-      events: eventCompositions[eventName] || []
+      events: Array.isArray(composition.events) ? composition.events : [],
+      parameters: composition.parameters || ""
     });
     setIsPersonalEditModalOpen(true);
   };
@@ -153,10 +175,21 @@ const EventsSection = () => {
   };
 
   const openBankEditModal = (eventName) => {
-    setCurrentEditEvent({
-      name: eventName,
-      events: eventCompositions[eventName] || []
-    });
+    const bankEvent = bankEvents.find(event => event.eventName === eventName);
+    if (bankEvent) {
+      setCurrentEditEvent({
+        name: eventName,
+        description: bankEvent.description || "",
+        events: bankEvent.pevents ? bankEvent.pevents.map(event => ({
+          id: event.id,
+          eventName: event.eventName,
+          description: event.description,
+          parameters: event.parameters,
+          pevents: event.pevents
+        })) : [],
+        parameters: bankEvent.pevents?.map(e => e.parameters).join(", ") || ""
+      });
+    }
     setIsBankEditModalOpen(true);
   };
 
@@ -209,7 +242,7 @@ const EventsSection = () => {
     // 检查是否有个人事件使用了这个银行事件
     const dependentEvents = Object.entries(eventCompositions)
       .filter(([key, events]) =>
-        personalEvents.includes(key) && events.includes(eventName)
+        personalEvents.includes(key) && events.events.includes(eventName)
       )
       .map(([key]) => key);
 
@@ -218,7 +251,7 @@ const EventsSection = () => {
       return;
     }
 
-    const newEvents = bankEvents.filter(event => event.name !== eventName);
+    const newEvents = bankEvents.filter(event => event.eventName !== eventName);
     setBankEvents(newEvents);
     saveToLocalStorage('bankEvents', newEvents);
 
@@ -244,7 +277,10 @@ const EventsSection = () => {
     // 保存事件组合信息
     const newCompositions = {
       ...eventCompositions,
-      [eventData.name]: eventData.events
+      [eventData.name]: {
+        events: Array.isArray(eventData.events) ? eventData.events : [],
+        parameters: eventData.parameters || ""
+      }
     };
     setEventCompositions(newCompositions);
     saveToLocalStorage('eventCompositions', newCompositions);
@@ -252,15 +288,22 @@ const EventsSection = () => {
 
   const handleSaveBankEvent = (eventData) => {
     // 如果事件名已存在，不添加新事件
-    if (bankEvents.some(event => event.name === eventData.name)) {
+    if (bankEvents.some(event => event.eventName === eventData.name)) {
       alert(`银行事件 "${eventData.name}" 已存在`);
       return;
     }
 
     const newEvent = {
-      name: eventData.name,
-      description: eventData.description,
-      events: eventData.events
+      id: bankEvents.length + 1,
+      eventName: eventData.name,
+      description: eventData.description || "",
+      pevents: Array.isArray(eventData.events) ? eventData.events.map(event => ({
+        id: event.id || bankEvents.length + 1,
+        eventName: event.eventName || "",
+        description: event.description || "",
+        parameters: event.parameters || "",
+        pevents: event.pevents || ""
+      })) : []
     };
 
     const newEvents = [...bankEvents, newEvent];
@@ -270,7 +313,10 @@ const EventsSection = () => {
     // 保存事件组合信息
     const newCompositions = {
       ...eventCompositions,
-      [eventData.name]: eventData.events
+      [eventData.name]: {
+        events: Array.isArray(eventData.events) ? eventData.events : [],
+        parameters: eventData.parameters || ""
+      }
     };
     setEventCompositions(newCompositions);
     saveToLocalStorage('eventCompositions', newCompositions);
@@ -300,7 +346,10 @@ const EventsSection = () => {
       delete newCompositions[oldName];
     }
     // 添加新事件的组合
-    newCompositions[newName] = eventData.events;
+    newCompositions[newName] = {
+      events: Array.isArray(eventData.events) ? eventData.events : [],
+      parameters: eventData.parameters || ""
+    };
     setEventCompositions(newCompositions);
     saveToLocalStorage('eventCompositions', newCompositions);
 
@@ -314,13 +363,20 @@ const EventsSection = () => {
     // 更新事件名称（如果有变化）
     if (oldName !== newName) {
       // 删除旧事件，添加新事件
-      const index = bankEvents.findIndex(event => event.name === oldName);
+      const index = bankEvents.findIndex(event => event.eventName === oldName);
       if (index !== -1) {
         const newEvents = [...bankEvents];
         newEvents.splice(index, 1, {
-          name: newName,
-          description: eventData.description,
-          events: eventData.events
+          ...newEvents[index],
+          eventName: newName,
+          description: eventData.description || "",
+          pevents: Array.isArray(eventData.events) ? eventData.events.map(event => ({
+            id: event.id || bankEvents.length + 1,
+            eventName: event.eventName || "",
+            description: event.description || "",
+            parameters: event.parameters || "",
+            pevents: event.pevents || ""
+          })) : []
         });
         setBankEvents(newEvents);
         saveToLocalStorage('bankEvents', newEvents);
@@ -330,7 +386,7 @@ const EventsSection = () => {
       const newCompositions = { ...eventCompositions };
       Object.keys(newCompositions).forEach(eventName => {
         if (personalEvents.includes(eventName)) {
-          const events = newCompositions[eventName];
+          const events = newCompositions[eventName].events;
           const eventIndex = events.indexOf(oldName);
           if (eventIndex !== -1) {
             events[eventIndex] = newName;
@@ -342,13 +398,19 @@ const EventsSection = () => {
       saveToLocalStorage('eventCompositions', newCompositions);
     } else {
       // 只更新描述和事件组合
-      const index = bankEvents.findIndex(event => event.name === oldName);
+      const index = bankEvents.findIndex(event => event.eventName === oldName);
       if (index !== -1) {
         const newEvents = [...bankEvents];
         newEvents[index] = {
           ...newEvents[index],
-          description: eventData.description,
-          events: eventData.events
+          description: eventData.description || "",
+          pevents: Array.isArray(eventData.events) ? eventData.events.map(event => ({
+            id: event.id || bankEvents.length + 1,
+            eventName: event.eventName || "",
+            description: event.description || "",
+            parameters: event.parameters || "",
+            pevents: event.pevents || ""
+          })) : []
         };
         setBankEvents(newEvents);
         saveToLocalStorage('bankEvents', newEvents);
@@ -362,7 +424,10 @@ const EventsSection = () => {
       delete newCompositions[oldName];
     }
     // 添加新事件的组合
-    newCompositions[newName] = eventData.events;
+    newCompositions[newName] = {
+      events: Array.isArray(eventData.events) ? eventData.events : [],
+      parameters: eventData.parameters || ""
+    };
     setEventCompositions(newCompositions);
     saveToLocalStorage('eventCompositions', newCompositions);
 
@@ -371,27 +436,34 @@ const EventsSection = () => {
 
   // 显示事件的详细信息（组成它的事件）
   const getEventDescription = (eventName) => {
-    const bankEvent = bankEvents.find(event => event.name === eventName);
+    const bankEvent = bankEvents.find(event => event.eventName === eventName);
     if (bankEvent) {
-      return bankEvent.description;
+      return `${bankEvent.description}${bankEvent.pevents ? `\n包含事件: ${bankEvent.pevents.map(e => `${e.eventName}(${e.parameters})`).join(', ')}` : ''}`;
     }
     const composition = eventCompositions[eventName];
-    if (composition && composition.length > 0) {
-      return `由 ${composition.join('、')} 组成`;
+    if (composition?.events && composition.events.length > 0) {
+      return `由 ${composition.events.join('、')} 组成`;
     }
     return '';
   };
 
   return (
-    <div className={styles.section} id="bankEventsSection">
-      {/* 个人事件库 */}
+    <div className={styles.section} id="eventsSection">
       <div className={styles.sectionTitle}>
         <div className={styles.sectionTitleText}>个人事件库</div>
         <div className={styles.titleActions}>
-          <button className={styles.actionIcon} onClick={togglePersonalSearch} title="搜索">
+          <button
+            className={styles.actionIcon}
+            onClick={togglePersonalSearch}
+            title={showPersonalSearch ? "关闭搜索" : "搜索"}
+          >
             🔍
           </button>
-          <button className={styles.actionIcon} onClick={openPersonalModal} title="添加">
+          <button
+            className={styles.actionIcon}
+            onClick={openPersonalModal}
+            title="添加个人事件"
+          >
             ➕
           </button>
         </div>
@@ -435,14 +507,21 @@ const EventsSection = () => {
         ))}
       </div>
 
-      {/* 银行事件库 */}
-      <div className={`${styles.sectionTitle} mt-4`}>
+      <div className={styles.sectionTitle}>
         <div className={styles.sectionTitleText}>银行事件库</div>
         <div className={styles.titleActions}>
-          <button className={styles.actionIcon} onClick={toggleBankSearch} title="搜索">
+          <button
+            className={styles.actionIcon}
+            onClick={toggleBankSearch}
+            title={showBankSearch ? "关闭搜索" : "搜索"}
+          >
             🔍
           </button>
-          <button className={styles.actionIcon} onClick={openBankModal} title="添加">
+          <button
+            className={styles.actionIcon}
+            onClick={openBankModal}
+            title="添加银行事件"
+          >
             ➕
           </button>
         </div>
@@ -460,30 +539,34 @@ const EventsSection = () => {
       )}
 
       <div className={styles.buttonContainer} id="bankEvents">
-        {filteredBankEvents.map((event, index) => (
-          <div key={`bank-${index}`} className={styles.eventWithActions}>
-            <ActionButton
-              text={event.name}
-              title={event.description || getEventDescription(event.name)}
-            />
-            <div className={styles.eventActions}>
-              <button
-                className={styles.editButton}
-                onClick={() => openBankEditModal(event.name)}
-                title="编辑"
-              >
-                ✏️
-              </button>
-              <button
-                className={styles.deleteButton}
-                onClick={() => openBankDeleteModal(event.name)}
-                title="删除"
-              >
-                🗑️
-              </button>
+        {isLoading ? (
+          <div className={styles.loading}>加载中...</div>
+        ) : (
+          filteredBankEvents.map((event) => (
+            <div key={`bank-${event.id}`} className={styles.eventWithActions}>
+              <ActionButton
+                text={event.eventName}
+                title={getEventDescription(event.eventName)}
+              />
+              <div className={styles.eventActions}>
+                <button
+                  className={styles.editButton}
+                  onClick={() => openBankEditModal(event.eventName)}
+                  title="编辑"
+                >
+                  ✏️
+                </button>
+                <button
+                  className={styles.deleteButton}
+                  onClick={() => openBankDeleteModal(event.eventName)}
+                  title="删除"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* 个人事件创建Modal */}
@@ -493,7 +576,7 @@ const EventsSection = () => {
         title="创建个人事件"
         nameLabel="个人事件名"
         eventType="银行事件"
-        availableEvents={bankEvents.map(event => event.name)}
+        availableEvents={bankEvents.map(event => event.eventName)}
         onSave={handleSavePersonalEvent}
       />
 
@@ -504,7 +587,7 @@ const EventsSection = () => {
         title="创建银行事件"
         nameLabel="银行事件名"
         eventType="标准事件"
-        availableEvents={standardEvents}
+        availableEvents={[]} // 这里需要从标准事件库获取
         onSave={handleSaveBankEvent}
       />
 
@@ -515,7 +598,7 @@ const EventsSection = () => {
         title="编辑个人事件"
         nameLabel="个人事件名"
         eventType="银行事件"
-        availableEvents={bankEvents.map(event => event.name)}
+        availableEvents={bankEvents.map(event => event.eventName)}
         onSave={handleUpdatePersonalEvent}
         initialEvent={currentEditEvent}
       />
@@ -527,7 +610,7 @@ const EventsSection = () => {
         title="编辑银行事件"
         nameLabel="银行事件名"
         eventType="标准事件"
-        availableEvents={standardEvents}
+        availableEvents={[]} // 这里需要从标准事件库获取
         onSave={handleUpdateBankEvent}
         initialEvent={currentEditEvent}
       />

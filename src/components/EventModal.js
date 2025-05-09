@@ -16,7 +16,12 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
     if (initialEvent) {
       setEventName(initialEvent.name || '');
       setEventDescription(initialEvent.description || '');
-      setSelectedEvents(initialEvent.events || []);
+      // 确保 selectedEvents 是字符串数组
+      setSelectedEvents(Array.isArray(initialEvent.events)
+        ? initialEvent.events.map(event =>
+          typeof event === 'object' ? event.eventName : event
+        )
+        : []);
     } else {
       setEventName('');
       setEventDescription('');
@@ -26,8 +31,8 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
 
   // 过滤可用事件，排除已选择的事件
   const filteredAvailableEvents = availableEvents.filter(event =>
-    event.toLowerCase().includes(searchQuery.toLowerCase()) &&
-    !selectedEvents.includes(event)
+    (typeof event === 'string' ? event : event.eventName).toLowerCase().includes(searchQuery.toLowerCase()) &&
+    !selectedEvents.includes(typeof event === 'string' ? event : event.eventName)
   );
 
   // 当Modal打开时，初始化拖拽功能
@@ -78,7 +83,8 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
   };
 
   const handleEventSelect = (event) => {
-    setSelectedEvents([...selectedEvents, event]);
+    const eventName = typeof event === 'string' ? event : event.eventName;
+    setSelectedEvents([...selectedEvents, eventName]);
     setSearchQuery('');
     setShowAvailableEvents(false);
   };
@@ -160,7 +166,7 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
                       className={styles.eventItem}
                       onClick={() => handleEventSelect(event)}
                     >
-                      {event}
+                      {typeof event === 'string' ? event : event.eventName}
                     </div>
                   ))
                 ) : (
