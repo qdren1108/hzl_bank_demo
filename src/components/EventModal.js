@@ -4,6 +4,22 @@ import Sortable from 'sortablejs';
 import styles from '../styles/Bank.module.css';
 import ActionButton from './ActionButton';
 
+// 默认的标准事件数据
+const DEFAULT_STANDARD_EVENTS = [
+  {
+    id: 1,
+    eventName: "OTP検索",
+    description: "ユーザOTP検索",
+    parameters: "usrid"
+  },
+  {
+    id: 2,
+    eventName: "OTP更新",
+    description: "ユーザOTP更新",
+    parameters: "usrid"
+  }
+];
+
 const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEvents, onSave, initialEvent = null }) => {
   const [eventName, setEventName] = useState('');
   const [eventDescription, setEventDescription] = useState('');
@@ -16,7 +32,6 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
     if (initialEvent) {
       setEventName(initialEvent.name || '');
       setEventDescription(initialEvent.description || '');
-      // 确保 selectedEvents 是字符串数组
       setSelectedEvents(Array.isArray(initialEvent.events)
         ? initialEvent.events.map(event =>
           typeof event === 'object' ? event.eventName : event
@@ -30,23 +45,21 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
   }, [initialEvent, isOpen]);
 
   // 过滤可用事件，排除已选择的事件
-  const filteredAvailableEvents = availableEvents.filter(event =>
-    (typeof event === 'string' ? event : event.eventName).toLowerCase().includes(searchQuery.toLowerCase()) &&
-    !selectedEvents.includes(typeof event === 'string' ? event : event.eventName)
-  );
+  const filteredAvailableEvents = (eventType === '标准事件' ? DEFAULT_STANDARD_EVENTS : availableEvents)
+    .filter(event => {
+      const eventName = typeof event === 'string' ? event : event.eventName;
+      return (!searchQuery || eventName.toLowerCase().includes(searchQuery.toLowerCase())) &&
+        !selectedEvents.includes(eventName);
+    });
 
   // 当Modal打开时，初始化拖拽功能
   useEffect(() => {
     if (isOpen) {
-      // 已选事件列表
       const selectedEventsEl = document.getElementById('selectedEvents');
-
       if (selectedEventsEl) {
-        // 初始化已选事件列表的拖拽
         new Sortable(selectedEventsEl, {
           animation: 150,
           onSort: (evt) => {
-            // 更新已选事件列表
             const newSelectedEvents = Array.from(selectedEventsEl.children).map(
               node => node.textContent
             );
@@ -66,13 +79,11 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
   };
 
   const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setSearchQuery(value);
+    setSearchQuery(e.target.value);
     setShowAvailableEvents(true);
   };
 
   const handleSearchBlur = () => {
-    // 延迟隐藏下拉列表，以便用户能够点击选项
     setTimeout(() => {
       setShowAvailableEvents(false);
     }, 200);
