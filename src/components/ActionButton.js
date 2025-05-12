@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import styles from '../styles/Bank.module.css';
 import ParameterModal from './ParameterModal';
+import { executeEventApi } from '../api/api';
 
 const ActionButton = ({ text, title, type = '' }) => {
   const buttonRef = useRef(null);
@@ -48,25 +49,10 @@ const ActionButton = ({ text, title, type = '' }) => {
       timestamp: new Date().toISOString()
     };
 
-    console.log('请求体:', JSON.stringify(requestBody, null, 2));
-
     try {
-      const response = await fetch('http://9.197.76.157:8080/api/events/todo', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        throw new Error('事件执行请求失败');
-      }
-
-      const result = await response.json();
-      console.log('事件执行成功，服务器响应:', JSON.stringify(result, null, 2));
+      await executeEventApi(requestBody);
     } catch (error) {
-      console.error('事件执行错误:', error);
+      // 错误已在api模块打印，这里可根据需要补充UI提示
     }
   };
 
