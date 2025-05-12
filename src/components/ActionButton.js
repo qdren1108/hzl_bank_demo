@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import styles from '../styles/Bank.module.css';
 import ParameterModal from './ParameterModal';
 import { executeEventApi } from '../api/api';
+import { useToast } from './ToastContext';
 
 const ActionButton = ({ text, title, type = '' }) => {
   const buttonRef = useRef(null);
@@ -9,6 +10,7 @@ const ActionButton = ({ text, title, type = '' }) => {
   const [isClicked, setIsClicked] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const [showParameterModal, setShowParameterModal] = useState(false);
+  const showToast = useToast();
 
   // 点击动画效果
   useEffect(() => {
@@ -25,34 +27,61 @@ const ActionButton = ({ text, title, type = '' }) => {
 
   // 处理事件执行
   const handleEventExecution = async (eventName, parameters) => {
-    // 构建完整的事件数据结构
-    const requestBody = {
-      id: 1,
-      eventName: eventName,
-      description: "ユーザOTP開始",
-      pevents: [
-        {
-          id: 1,
-          eventName: "OTP検索",
-          description: "ユーザOTP検索",
-          parameters: parameters['OTP検索'].usrid,
-          pevents: "/bank/transfer"
-        },
-        {
-          id: 2,
-          eventName: "OTP更新",
-          description: "ユーザOTP更新",
-          parameters: parameters['OTP更新'].usrid,
-          pevents: "/bank/transfer"
-        }
-      ],
-      timestamp: new Date().toISOString()
-    };
-
     try {
+      // 构建完整的事件数据结构
+      const requestBody = {
+        id: 1,
+        eventName: eventName,
+        description: "ユーザOTP開始",
+        pevents: [
+          {
+            id: 1,
+            eventName: "OTP検索",
+            description: "ユーザOTP検索",
+            parameters: parameters['OTP検索']?.usrid || '',
+            pevents: "/bank/transfer"
+          },
+          {
+            id: 2,
+            eventName: "OTP更新",
+            description: "ユーザOTP更新",
+            parameters: parameters['OTP更新']?.usrid || '',
+            pevents: "/bank/transfer"
+          }
+        ],
+        timestamp: new Date().toISOString()
+      };
+
       await executeEventApi(requestBody);
+      showToast('事件执行成功', 'success', 3000);
+
+      // 执行成功后再触发显示事件
+      showEventInChat(eventName);
     } catch (error) {
-      // 错误已在api模块打印，这里可根据需要补充UI提示
+      console.error('事件执行失败:', error);
+
+      // 根据错误类型显示不同的错误信息
+      let errorMessage = '事件执行失败';
+      if (error.message.includes('超时')) {
+        errorMessage = '服务器响应超时，请稍后重试';
+      } else if (error.message.includes('网络连接')) {
+        errorMessage = '网络连接异常，请检查网络设置';
+      } else {
+        errorMessage = `事件执行失败: ${error.message}`;
+      }
+
+      showToast(errorMessage, 'error', 5000);
+
+      // 执行失败时也在聊天窗口显示错误信息
+      const event = new CustomEvent('showEventInChat', {
+        detail: {
+          eventName,
+          error: errorMessage
+        },
+        bubbles: true,
+        cancelable: true
+      });
+      document.dispatchEvent(event);
     }
   };
 

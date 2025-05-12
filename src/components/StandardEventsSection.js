@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from '../styles/Bank.module.css';
 import ActionButton from './ActionButton';
+import { fetchStandardEvents } from '../api/api';
+import { useToast } from './ToastContext';
 
 const StandardEventsSection = () => {
   const [searchText, setSearchText] = useState('');
@@ -9,6 +11,7 @@ const StandardEventsSection = () => {
   const [standardEvents, setStandardEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const hasAttemptedFetch = useRef(false);
+  const showToast = useToast();
 
   // 默认事件数据
   const defaultEvents = [
@@ -27,7 +30,7 @@ const StandardEventsSection = () => {
   ];
 
   useEffect(() => {
-    const fetchStandardEvents = async () => {
+    const fetchEvents = async () => {
       // 如果已经尝试过获取数据，直接使用默认数据
       if (hasAttemptedFetch.current) {
         setStandardEvents(defaultEvents);
@@ -37,34 +40,21 @@ const StandardEventsSection = () => {
       setIsLoading(true);
 
       try {
-        // 创建一个超时Promise
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('请求超时')), 3000);
-        });
-
-        // 创建实际的API请求Promise
-        const fetchPromise = fetch('http://9.197.76.157:8080/api/events/standard');
-
-        // 使用Promise.race来竞争，谁先完成就用谁的结果
-        const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-        if (!response.ok) {
-          throw new Error('API请求失败');
-        }
-
-        const data = await response.json();
+        const data = await fetchStandardEvents();
         setStandardEvents(data);
-      } catch (err) {
-        // 静默失败，直接使用默认数据
+        showToast('标准事件库加载成功', 'success');
+      } catch (error) {
+        console.error('获取标准事件库失败:', error);
         setStandardEvents(defaultEvents);
+        showToast(error.message || '标准事件库加载失败，使用默认数据', 'error', 5000);
       } finally {
         setIsLoading(false);
         hasAttemptedFetch.current = true;
       }
     };
 
-    fetchStandardEvents();
-  }, []); // 空依赖数组，只在组件挂载时执行一次
+    fetchEvents();
+  }, [showToast]);
 
   // 搜索过滤逻辑
   const filteredEvents = standardEvents.filter(event =>

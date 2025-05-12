@@ -1033,3 +1033,31 @@
 .closeButton:hover {
   color: #333;
 }
+
+.toast {
+  position: fixed;
+  top: 30px;
+  right: 30px;
+  min-width: 180px;
+  max-width: 320px;
+  padding: 14px 24px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 16px;
+  z-index: 2000;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  opacity: 0.95;
+  transition: all 0.3s;
+}
+
+.toast_success {
+  background: #52c41a;
+}
+
+.toast_error {
+  background: #ff4d4f;
+}
+
+.toast_info {
+  background: #1890ff;
+}
