@@ -1,11 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import styles from '../styles/Bank.module.css';
+import ParameterModal from './ParameterModal';
 
 const ActionButton = ({ text, title, type = '' }) => {
   const buttonRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isClicked, setIsClicked] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [showParameterModal, setShowParameterModal] = useState(false);
 
   // 点击动画效果
   useEffect(() => {
@@ -20,6 +22,54 @@ const ActionButton = ({ text, title, type = '' }) => {
   // 标准事件不可拖拽到聊天窗口及点击显示
   const isStandardEvent = type === 'standard';
 
+  // 处理事件执行
+  const handleEventExecution = async (eventName, parameters) => {
+    // 构建完整的事件数据结构
+    const requestBody = {
+      id: 1,
+      eventName: eventName,
+      description: "ユーザOTP開始",
+      pevents: [
+        {
+          id: 1,
+          eventName: "OTP検索",
+          description: "ユーザOTP検索",
+          parameters: parameters['OTP検索'].usrid,
+          pevents: "/bank/transfer"
+        },
+        {
+          id: 2,
+          eventName: "OTP更新",
+          description: "ユーザOTP更新",
+          parameters: parameters['OTP更新'].usrid,
+          pevents: "/bank/transfer"
+        }
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('请求体:', JSON.stringify(requestBody, null, 2));
+
+    try {
+      const response = await fetch('http://9.197.76.157:8080/api/events/todo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        throw new Error('事件执行请求失败');
+      }
+
+      const result = await response.json();
+      console.log('事件执行成功，服务器响应:', JSON.stringify(result, null, 2));
+    } catch (error) {
+      console.error('事件执行错误:', error);
+    }
+  };
+
   const handleClick = (e) => {
     // 阻止事件冒泡，避免与父元素的点击事件冲突
     e.stopPropagation();
@@ -31,6 +81,14 @@ const ActionButton = ({ text, title, type = '' }) => {
 
     // 设置点击状态，触发动画
     setIsClicked(true);
+
+    // 显示参数设置窗口
+    setShowParameterModal(true);
+  };
+
+  const handleParameterConfirm = (parameters) => {
+    // 执行事件
+    handleEventExecution(text, parameters);
 
     // 在Chat中显示事件
     console.log('Action按钮点击:', text);
@@ -114,6 +172,12 @@ const ActionButton = ({ text, title, type = '' }) => {
           {title}
         </div>
       )}
+      <ParameterModal
+        isOpen={showParameterModal}
+        onClose={() => setShowParameterModal(false)}
+        eventName={text}
+        onConfirm={handleParameterConfirm}
+      />
     </div>
   );
 };
