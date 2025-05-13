@@ -541,8 +541,10 @@
 .modalFooter {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
   gap: 10px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
 }
 
 .saveButton {
@@ -1060,4 +1062,19 @@
 
 .toast_info {
   background: #1890ff;
+}
+
+/* 保存按钮样式 */
+.saveToPersonal {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.saveToPersonal:hover {
+  background-color: #218838;
 }

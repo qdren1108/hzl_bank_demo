@@ -494,6 +494,12 @@ const EventsSection = () => {
     return '';
   };
 
+  // 处理事件保存后的更新
+  const handleEventSaved = (newPersonalEvents, newEventCompositions) => {
+    setPersonalEvents(newPersonalEvents);
+    setEventCompositions(newEventCompositions);
+  };
+
   return (
     <div className={styles.section} id="eventsSection">
       <div className={styles.sectionTitle}>
@@ -594,6 +600,7 @@ const EventsSection = () => {
               <ActionButton
                 text={event.eventName}
                 title={getEventDescription(event.eventName)}
+                onEventSaved={handleEventSaved}
               />
               <div className={styles.eventActions}>
                 <button

@@ -4,7 +4,7 @@ import ParameterModal from './ParameterModal';
 import { executeEventApi } from '../api/api';
 import { useToast } from './ToastContext';
 
-const ActionButton = ({ text, title, type = '' }) => {
+const ActionButton = ({ text, title, type = '', onEventSaved }) => {
   const buttonRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isClicked, setIsClicked] = useState(false);
@@ -102,12 +102,53 @@ const ActionButton = ({ text, title, type = '' }) => {
   };
 
   const handleParameterConfirm = (parameters) => {
+    // 检查是否是从个人事件库执行
+    const eventCompositions = JSON.parse(localStorage.getItem('eventCompositions') || '{}');
+    const savedEvent = eventCompositions[text];
+
+    // 如果是已保存的事件，使用保存的参数
+    const paramsToUse = savedEvent?.parameters || parameters;
+
     // 执行事件
-    handleEventExecution(text, parameters);
+    handleEventExecution(text, paramsToUse);
 
     // 在Chat中显示事件
     console.log('Action按钮点击:', text);
     showEventInChat(text);
+  };
+
+  const handleSaveToPersonal = (eventName, parameters) => {
+    // 获取当前个人事件库
+    const savedEvents = JSON.parse(localStorage.getItem('personalEvents') || '[]');
+    const eventCompositions = JSON.parse(localStorage.getItem('eventCompositions') || '{}');
+
+    // 检查事件名称是否已存在
+    if (savedEvents.includes(eventName)) {
+      showToast(`个人事件 "${eventName}" 已存在`, 'error');
+      return;
+    }
+
+    // 添加新事件到个人事件库
+    savedEvents.push(eventName);
+
+    // 构建事件组合信息，包含完整的参数信息
+    eventCompositions[eventName] = {
+      events: [eventName],
+      parameters: parameters,  // 直接保存完整的参数对象
+      type: 'bank',  // 标记这是一个银行事件
+      timestamp: new Date().toISOString()
+    };
+
+    // 保存到localStorage
+    localStorage.setItem('personalEvents', JSON.stringify(savedEvents));
+    localStorage.setItem('eventCompositions', JSON.stringify(eventCompositions));
+
+    // 通知父组件更新事件列表
+    if (onEventSaved) {
+      onEventSaved(savedEvents, eventCompositions);
+    }
+
+    showToast('事件已保存到个人事件库', 'success');
   };
 
   const handleDragStart = (e) => {
@@ -192,6 +233,7 @@ const ActionButton = ({ text, title, type = '' }) => {
         onClose={() => setShowParameterModal(false)}
         eventName={text}
         onConfirm={handleParameterConfirm}
+        onSave={handleSaveToPersonal}
       />
     </div>
   );
