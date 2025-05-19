@@ -31,7 +31,6 @@ const StandardEventsSection = () => {
 
   useEffect(() => {
     const fetchEvents = async () => {
-      // 如果已经尝试过获取数据，直接使用默认数据
       if (hasAttemptedFetch.current) {
         setStandardEvents(defaultEvents);
         return;
@@ -41,10 +40,61 @@ const StandardEventsSection = () => {
 
       try {
         const data = await fetchStandardEvents();
-        setStandardEvents(data);
+        // 添加详细的调试日志
+        console.group('标准事件库数据结构');
+        console.log('API原始返回数据:', JSON.stringify(data, null, 2));
+        console.log('数据类型:', Object.prototype.toString.call(data));
+        if (Array.isArray(data)) {
+          console.log('数组长度:', data.length);
+          if (data.length > 0) {
+            console.log('第一个事件示例:', JSON.stringify(data[0], null, 2));
+            console.log('第一个事件的属性列表:', Object.keys(data[0]));
+          }
+        }
+        console.groupEnd();
+
+        // 确保每个事件对象都有必要的属性
+        const validatedData = data.map(event => {
+          const validatedEvent = {
+            id: event.id || Math.random().toString(36).substr(2, 9),
+            eventName: event.eventName || '未命名事件',
+            description: event.description || '',
+            parameters: event.parameters || ''
+          };
+
+          // 记录数据转换过程
+          if (event.id !== validatedEvent.id ||
+            event.eventName !== validatedEvent.eventName ||
+            event.description !== validatedEvent.description ||
+            event.parameters !== validatedEvent.parameters) {
+            console.log('事件数据补充:', {
+              原始数据: event,
+              处理后数据: validatedEvent,
+              补充的字段: {
+                id: event.id ? '未变更' : '已生成新ID',
+                eventName: event.eventName ? '未变更' : '已设为默认值',
+                description: event.description ? '未变更' : '已设为空字符串',
+                parameters: event.parameters ? '未变更' : '已设为空字符串'
+              }
+            });
+          }
+
+          return validatedEvent;
+        });
+
+        console.log('数据验证后的结果:', JSON.stringify(validatedData, null, 2));
+        setStandardEvents(validatedData);
         showToast('标准事件库加载成功', 'success');
       } catch (error) {
-        console.error('获取标准事件库失败:', error);
+        console.group('标准事件库加载错误');
+        console.error('错误详情:', error);
+        console.error('错误信息:', error.message);
+        console.error('错误堆栈:', error.stack);
+        if (error.response) {
+          console.error('API响应状态:', error.response.status);
+          console.error('API响应数据:', error.response.data);
+        }
+        console.groupEnd();
         setStandardEvents(defaultEvents);
         showToast(error.message || '标准事件库加载失败，使用默认数据', 'error', 5000);
       } finally {
@@ -57,9 +107,11 @@ const StandardEventsSection = () => {
   }, [showToast]);
 
   // 搜索过滤逻辑
-  const filteredEvents = standardEvents.filter(event =>
-    event.eventName.toLowerCase().includes(searchText.toLowerCase())
-  );
+  const filteredEvents = standardEvents.filter(event => {
+    // 确保事件对象有 eventName 属性
+    const eventName = event?.eventName || '';
+    return eventName.toLowerCase().includes(searchText.toLowerCase());
+  });
 
   const handleSearch = (e) => {
     setSearchText(e.target.value);
