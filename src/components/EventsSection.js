@@ -28,23 +28,29 @@ const EventsSection = () => {
   // 默认银行事件数据
   const defaultBankEvents = [
     {
-      id: 1,
-      eventName: "OTP開始",
+      name: "OTP開始",
       description: "ユーザOTP開始",
-      pevents: [
+      events: [
         {
-          id: 1,
-          eventName: "OTP検索",
+          name: "OTP検索",
           description: "ユーザOTP検索",
-          parameters: "usrid",
-          pevents: "/bank/transfer"
+          tag: "",
+          httpUrl: "http://9.197.76.157:8080/api/otp/{userid}/status",
+          httpMethod: "get",
+          params: {
+            userid: ""
+          }
         },
         {
-          id: 2,
-          eventName: "OTP更新",
+          name: "OTP更新",
           description: "ユーザOTP更新",
-          parameters: "usrid",
-          pevents: "/bank/transfer"
+          tag: "",
+          httpUrl: "http://9.197.76.157:8080/api/otp/status",
+          httpMethod: "put",
+          params: {
+            userid: "",
+            newStatus: ""
+          }
         }
       ]
     }
@@ -137,7 +143,7 @@ const EventsSection = () => {
   );
 
   const filteredBankEvents = bankEvents.filter(event =>
-    event.eventName.toLowerCase().includes(searchBankText.toLowerCase())
+    event.name.toLowerCase().includes(searchBankText.toLowerCase())
   );
 
   // 搜索相关处理函数
@@ -197,19 +203,20 @@ const EventsSection = () => {
   };
 
   const openBankEditModal = (eventName) => {
-    const bankEvent = bankEvents.find(event => event.eventName === eventName);
+    const bankEvent = bankEvents.find(event => event.name === eventName);
     if (bankEvent) {
       setCurrentEditEvent({
         name: eventName,
         description: bankEvent.description || "",
-        events: bankEvent.pevents ? bankEvent.pevents.map(event => ({
-          id: event.id,
-          eventName: event.eventName,
-          description: event.description,
-          parameters: event.parameters,
-          pevents: event.pevents
+        events: bankEvent.events ? bankEvent.events.map(event => ({
+          name: event.name || "",
+          description: event.description || "",
+          tag: event.tag || "",
+          httpUrl: event.httpUrl || "",
+          httpMethod: event.httpMethod || "get",
+          params: event.params || { userid: "" }
         })) : [],
-        parameters: bankEvent.pevents?.map(e => e.parameters).join(", ") || ""
+        parameters: bankEvent.events?.map(e => e.params).join(", ") || ""
       });
     }
     setIsBankEditModalOpen(true);
@@ -274,7 +281,7 @@ const EventsSection = () => {
       return;
     }
 
-    const newEvents = bankEvents.filter(event => event.eventName !== eventName);
+    const newEvents = bankEvents.filter(event => event.name !== eventName);
     setBankEvents(newEvents);
     saveToLocalStorage('bankEvents', newEvents);
     // 删除组合信息
@@ -311,23 +318,38 @@ const EventsSection = () => {
 
   const handleSaveBankEvent = async (eventData) => {
     // 如果事件名已存在，不添加新事件
-    if (bankEvents.some(event => event.eventName === eventData.name)) {
+    if (bankEvents.some(event => event.name === eventData.name)) {
       showToast(`银行事件 "${eventData.name}" 已存在`, 'error');
       return;
     }
 
+    // 从localStorage获取标准事件库数据
+    const standardEvents = JSON.parse(localStorage.getItem('standardEvents') || '[]');
+
     // 构造请求体
     const newEvent = {
-      eventName: eventData.name,
+      name: eventData.name,
       description: eventData.description || "",
-      pevents: Array.isArray(eventData.events) ? eventData.events.map((event, idx) => ({
-        id: event.id || idx + 1,
-        eventName: event.eventName || "",
-        description: event.description || "",
-        parameters: event.parameters || "",
-        pevents: event.pevents || ""
-      })) : []
+      events: Array.isArray(eventData.events) ? eventData.events.map(selectedEvent => {
+        // 查找对应的标准事件
+        const standardEvent = standardEvents.find(std => std.name === selectedEvent.name);
+        if (!standardEvent) {
+          console.error(`未找到标准事件: ${selectedEvent.name}`);
+          return null;
+        }
+        // 继承标准事件的所有字段，只允许修改params
+        return {
+          ...standardEvent,
+          params: selectedEvent.params || standardEvent.params || { userid: "" }
+        };
+      }).filter(Boolean) : [] // 过滤掉null值
     };
+
+    // 验证是否所有选择的事件都找到了对应的标准事件
+    if (newEvent.events.length !== eventData.events.length) {
+      showToast('部分标准事件未找到，请检查选择的事件', 'error');
+      return;
+    }
 
     // 打印请求体
     console.log('添加银行事件API请求体:', JSON.stringify(newEvent, null, 2));
@@ -347,8 +369,8 @@ const EventsSection = () => {
       const newCompositions = {
         ...eventCompositions,
         [eventData.name]: {
-          events: Array.isArray(eventData.events) ? eventData.events : [],
-          parameters: eventData.parameters || ""
+          events: newEvent.events,
+          params: eventData.params || {}
         }
       };
       setEventCompositions(newCompositions);
@@ -361,7 +383,7 @@ const EventsSection = () => {
       showToast(error.message || '银行事件添加失败', 'error', 5000);
 
       // 本地保存（可选，根据需求决定是否保留）
-      const addedEvent = { ...newEvent, id: bankEvents.length + 1 };
+      const addedEvent = { ...newEvent };
       const newEvents = [...bankEvents, addedEvent];
       setBankEvents(newEvents);
       saveToLocalStorage('bankEvents', newEvents);
@@ -407,24 +429,41 @@ const EventsSection = () => {
     const oldName = currentEditEvent.name;
     const newName = eventData.name;
 
+    // 从localStorage获取标准事件库数据
+    const standardEvents = JSON.parse(localStorage.getItem('standardEvents') || '[]');
+
     // 更新事件名称（如果有变化）
     if (oldName !== newName) {
       // 删除旧事件，添加新事件
-      const index = bankEvents.findIndex(event => event.eventName === oldName);
+      const index = bankEvents.findIndex(event => event.name === oldName);
       if (index !== -1) {
         const newEvents = [...bankEvents];
-        newEvents.splice(index, 1, {
+        const updatedEvent = {
           ...newEvents[index],
-          eventName: newName,
+          name: newName,
           description: eventData.description || "",
-          pevents: Array.isArray(eventData.events) ? eventData.events.map(event => ({
-            id: event.id || bankEvents.length + 1,
-            eventName: event.eventName || "",
-            description: event.description || "",
-            parameters: event.parameters || "",
-            pevents: event.pevents || ""
-          })) : []
-        });
+          events: Array.isArray(eventData.events) ? eventData.events.map(selectedEvent => {
+            // 查找对应的标准事件
+            const standardEvent = standardEvents.find(std => std.name === selectedEvent.name);
+            if (!standardEvent) {
+              console.error(`未找到标准事件: ${selectedEvent.name}`);
+              return null;
+            }
+            // 继承标准事件的所有字段，只允许修改params
+            return {
+              ...standardEvent,
+              params: selectedEvent.params || standardEvent.params || { userid: "" }
+            };
+          }).filter(Boolean) : []
+        };
+
+        // 验证是否所有选择的事件都找到了对应的标准事件
+        if (updatedEvent.events.length !== eventData.events.length) {
+          showToast('部分标准事件未找到，请检查选择的事件', 'error');
+          return;
+        }
+
+        newEvents.splice(index, 1, updatedEvent);
         setBankEvents(newEvents);
         saveToLocalStorage('bankEvents', newEvents);
       }
@@ -445,20 +484,34 @@ const EventsSection = () => {
       saveToLocalStorage('eventCompositions', newCompositions);
     } else {
       // 只更新描述和事件组合
-      const index = bankEvents.findIndex(event => event.eventName === oldName);
+      const index = bankEvents.findIndex(event => event.name === oldName);
       if (index !== -1) {
         const newEvents = [...bankEvents];
-        newEvents[index] = {
+        const updatedEvent = {
           ...newEvents[index],
           description: eventData.description || "",
-          pevents: Array.isArray(eventData.events) ? eventData.events.map(event => ({
-            id: event.id || bankEvents.length + 1,
-            eventName: event.eventName || "",
-            description: event.description || "",
-            parameters: event.parameters || "",
-            pevents: event.pevents || ""
-          })) : []
+          events: Array.isArray(eventData.events) ? eventData.events.map(selectedEvent => {
+            // 查找对应的标准事件
+            const standardEvent = standardEvents.find(std => std.name === selectedEvent.name);
+            if (!standardEvent) {
+              console.error(`未找到标准事件: ${selectedEvent.name}`);
+              return null;
+            }
+            // 继承标准事件的所有字段，只允许修改params
+            return {
+              ...standardEvent,
+              params: selectedEvent.params || standardEvent.params || { userid: "" }
+            };
+          }).filter(Boolean) : []
         };
+
+        // 验证是否所有选择的事件都找到了对应的标准事件
+        if (updatedEvent.events.length !== eventData.events.length) {
+          showToast('部分标准事件未找到，请检查选择的事件', 'error');
+          return;
+        }
+
+        newEvents[index] = updatedEvent;
         setBankEvents(newEvents);
         saveToLocalStorage('bankEvents', newEvents);
       }
@@ -473,7 +526,7 @@ const EventsSection = () => {
     // 添加新事件的组合
     newCompositions[newName] = {
       events: Array.isArray(eventData.events) ? eventData.events : [],
-      parameters: eventData.parameters || ""
+      params: eventData.params || {}
     };
     setEventCompositions(newCompositions);
     saveToLocalStorage('eventCompositions', newCompositions);
@@ -483,13 +536,13 @@ const EventsSection = () => {
 
   // 显示事件的详细信息（组成它的事件）
   const getEventDescription = (eventName) => {
-    const bankEvent = bankEvents.find(event => event.eventName === eventName);
+    const bankEvent = bankEvents.find(event => event.name === eventName);
     if (bankEvent) {
-      return `${bankEvent.description}${bankEvent.pevents ? `\n包含事件: ${bankEvent.pevents.map(e => `${e.eventName}(${e.parameters})`).join(', ')}` : ''}`;
+      return `${bankEvent.description}${bankEvent.events ? `\n包含事件: ${bankEvent.events.map(e => `${e.name}(${JSON.stringify(e.params)})`).join(', ')}` : ''}`;
     }
     const composition = eventCompositions[eventName];
     if (composition?.events && composition.events.length > 0) {
-      return `由 ${composition.events.join('、')} 组成`;
+      return `由 ${composition.events.map(e => e.name || e).join('、')} 组成`;
     }
     return '';
   };
@@ -598,21 +651,21 @@ const EventsSection = () => {
           filteredBankEvents.map((event) => (
             <div key={`bank-${event.id}`} className={styles.eventWithActions}>
               <ActionButton
-                text={event.eventName}
-                title={getEventDescription(event.eventName)}
+                text={event.name}
+                title={getEventDescription(event.name)}
                 onEventSaved={handleEventSaved}
               />
               <div className={styles.eventActions}>
                 <button
                   className={styles.editButton}
-                  onClick={() => openBankEditModal(event.eventName)}
+                  onClick={() => openBankEditModal(event.name)}
                   title="编辑"
                 >
                   ✏️
                 </button>
                 <button
                   className={styles.deleteButton}
-                  onClick={() => openBankDeleteModal(event.eventName)}
+                  onClick={() => openBankDeleteModal(event.name)}
                   title="删除"
                 >
                   🗑️
@@ -630,7 +683,7 @@ const EventsSection = () => {
         title="创建个人事件"
         nameLabel="个人事件名"
         eventType="银行事件"
-        availableEvents={bankEvents.map(event => event.eventName)}
+        availableEvents={bankEvents.map(event => event.name)}
         onSave={handleSavePersonalEvent}
       />
 
@@ -652,7 +705,7 @@ const EventsSection = () => {
         title="编辑个人事件"
         nameLabel="个人事件名"
         eventType="银行事件"
-        availableEvents={bankEvents.map(event => event.eventName)}
+        availableEvents={bankEvents.map(event => event.name)}
         onSave={handleUpdatePersonalEvent}
         initialEvent={currentEditEvent}
       />

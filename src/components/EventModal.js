@@ -4,28 +4,13 @@ import Sortable from 'sortablejs';
 import styles from '../styles/Bank.module.css';
 import ActionButton from './ActionButton';
 
-// 默认的标准事件数据
-const DEFAULT_STANDARD_EVENTS = [
-  {
-    id: 1,
-    eventName: "OTP検索",
-    description: "ユーザOTP検索",
-    parameters: "usrid"
-  },
-  {
-    id: 2,
-    eventName: "OTP更新",
-    description: "ユーザOTP更新",
-    parameters: "usrid"
-  }
-];
-
 const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEvents, onSave, initialEvent = null }) => {
   const [eventName, setEventName] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [selectedEvents, setSelectedEvents] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAvailableEvents, setShowAvailableEvents] = useState(false);
+  const [standardEvents, setStandardEvents] = useState([]);
 
   // 初始化编辑状态
   useEffect(() => {
@@ -34,7 +19,7 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
       setEventDescription(initialEvent.description || '');
       setSelectedEvents(Array.isArray(initialEvent.events)
         ? initialEvent.events.map(event =>
-          typeof event === 'object' ? event : { eventName: event }
+          typeof event === 'object' ? event : { name: event }
         )
         : []);
     } else {
@@ -44,12 +29,21 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
     }
   }, [initialEvent, isOpen]);
 
+  // 从localStorage加载标准事件
+  useEffect(() => {
+    if (eventType === '标准事件') {
+      const savedStandardEvents = JSON.parse(localStorage.getItem('standardEvents') || '[]');
+      console.log('从localStorage加载的标准事件:', savedStandardEvents);
+      setStandardEvents(savedStandardEvents);
+    }
+  }, [eventType, isOpen]);
+
   // 过滤可用事件，排除已选择的事件
-  const filteredAvailableEvents = (eventType === '标准事件' ? DEFAULT_STANDARD_EVENTS : availableEvents)
+  const filteredAvailableEvents = (eventType === '标准事件' ? standardEvents : availableEvents)
     .filter(event => {
-      const eventNameStr = typeof event === 'string' ? event : event.eventName;
+      const eventNameStr = typeof event === 'string' ? event : event.name;
       return (!searchQuery || eventNameStr.toLowerCase().includes(searchQuery.toLowerCase())) &&
-        !selectedEvents.some(sel => sel.eventName === eventNameStr);
+        !selectedEvents.some(sel => sel.name === eventNameStr);
     });
 
   // 当Modal打开时，初始化拖拽功能
@@ -64,7 +58,7 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
               node => node.textContent
             );
             setSelectedEvents(newSelectedEvents.map(event =>
-              typeof event === 'string' ? { eventName: event } : event
+              typeof event === 'string' ? { name: event } : event
             ));
           }
         });
@@ -97,7 +91,7 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
 
   const handleEventSelect = (event) => {
     const eventObj = typeof event === 'string'
-      ? (DEFAULT_STANDARD_EVENTS.find(e => e.eventName === event) || { eventName: event })
+      ? { name: event }
       : event;
     setSelectedEvents([...selectedEvents, eventObj]);
     setSearchQuery('');
@@ -105,7 +99,7 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
   };
 
   const handleRemoveEvent = (eventToRemove) => {
-    setSelectedEvents(selectedEvents.filter(event => event.eventName !== (eventToRemove.eventName || eventToRemove)));
+    setSelectedEvents(selectedEvents.filter(event => event.name !== (eventToRemove.name || eventToRemove)));
   };
 
   const handleSave = () => {
@@ -181,7 +175,7 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
                       className={styles.eventItem}
                       onClick={() => handleEventSelect(event)}
                     >
-                      {typeof event === 'string' ? event : event.eventName}
+                      {typeof event === 'string' ? event : event.name}
                     </div>
                   ))
                 ) : (
@@ -199,7 +193,7 @@ const EventModal = ({ isOpen, onClose, title, nameLabel, eventType, availableEve
               {selectedEvents.length > 0 ? (
                 selectedEvents.map((event, index) => (
                   <div key={index} className={styles.selectedEventItem}>
-                    <span className={styles.eventText}>{event.eventName}</span>
+                    <span className={styles.eventText}>{event.name}</span>
                     <button
                       className={styles.removeEventBtn}
                       onClick={() => handleRemoveEvent(event)}

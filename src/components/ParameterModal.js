@@ -3,21 +3,26 @@ import ReactDOM from 'react-dom';
 import styles from '../styles/Bank.module.css';
 
 const ParameterModal = ({ isOpen, onClose, eventName, onConfirm, onSave }) => {
-    // 获取事件的组成部分
+    // 获取事件的组成部分和它们的参数定义
     const getEventComponents = () => {
+        const standardEvents = JSON.parse(localStorage.getItem('standardEvents') || '[]');
         const eventCompositions = JSON.parse(localStorage.getItem('eventCompositions') || '{}');
         const bankEvents = JSON.parse(localStorage.getItem('bankEvents') || '[]');
 
         // 先查找是否是银行事件
-        const bankEvent = bankEvents.find(event => event.eventName === eventName);
-        if (bankEvent && bankEvent.pevents) {
-            return bankEvent.pevents.map(event => event.eventName);
+        const bankEvent = bankEvents.find(event => event.name === eventName);
+        if (bankEvent && bankEvent.events) {
+            return bankEvent.events;
         }
 
         // 如果不是银行事件，查找个人事件组合
         const savedEvent = eventCompositions[eventName];
         if (savedEvent && savedEvent.events) {
-            return savedEvent.events;
+            // 对于每个事件名称，查找对应的标准事件定义
+            return savedEvent.events.map(eventName => {
+                const standardEvent = standardEvents.find(std => std.name === eventName);
+                return standardEvent || { name: eventName, params: {} };
+            });
         }
 
         return [];
@@ -27,6 +32,7 @@ const ParameterModal = ({ isOpen, onClose, eventName, onConfirm, onSave }) => {
     const getSavedParameters = () => {
         const eventCompositions = JSON.parse(localStorage.getItem('eventCompositions') || '{}');
         const savedEvent = eventCompositions[eventName];
+
         if (savedEvent?.parameters) {
             return savedEvent.parameters;
         }
@@ -34,7 +40,7 @@ const ParameterModal = ({ isOpen, onClose, eventName, onConfirm, onSave }) => {
         // 如果没有保存的参数，根据组件创建默认参数对象
         const components = getEventComponents();
         return components.reduce((acc, component) => {
-            acc[component] = { usrid: '' };
+            acc[component.name] = { ...component.params };
             return acc;
         }, {});
     };
@@ -95,20 +101,22 @@ const ParameterModal = ({ isOpen, onClose, eventName, onConfirm, onSave }) => {
                             />
                         </div>
                         {components.map((component) => (
-                            <div key={component} className={styles.formGroup}>
-                                <label className={styles.formLabel}>{component}参数设置</label>
+                            <div key={component.name} className={styles.formGroup}>
+                                <label className={styles.formLabel}>{component.name}参数设置</label>
                                 <div className={styles.subEventParams}>
-                                    <div className={styles.paramInput}>
-                                        <label className={styles.formLabel}>用户ID</label>
-                                        <input
-                                            type="text"
-                                            value={parameters[component]?.usrid || ''}
-                                            onChange={(e) => handleChange(component, 'usrid', e.target.value)}
-                                            className={styles.formInput}
-                                            placeholder={`请输入${component}的用户ID`}
-                                            required
-                                        />
-                                    </div>
+                                    {Object.keys(component.params || {}).map(paramName => (
+                                        <div key={paramName} className={styles.paramInput}>
+                                            <label className={styles.formLabel}>{paramName}</label>
+                                            <input
+                                                type="text"
+                                                value={parameters[component.name]?.[paramName] || ''}
+                                                onChange={(e) => handleChange(component.name, paramName, e.target.value)}
+                                                className={styles.formInput}
+                                                placeholder={`请输入${paramName}`}
+                                                required
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         ))}

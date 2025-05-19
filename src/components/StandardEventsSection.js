@@ -16,16 +16,25 @@ const StandardEventsSection = () => {
   // 默认事件数据
   const defaultEvents = [
     {
-      id: 1,
-      eventName: "OTP検索",
+      name: "OTP検索",
       description: "ユーザOTP検索",
-      parameters: "usrid"
+      tag: "",
+      httpUrl: "http://9.197.76.157:8080/api/otp/{userid}/status",
+      httpMethod: "get",
+      params: {
+        userid: ""
+      }
     },
     {
-      id: 2,
-      eventName: "OTP更新",
+      name: "OTP更新",
       description: "ユーザOTP更新",
-      parameters: "usrid"
+      tag: "",
+      httpUrl: "http://9.197.76.157:8080/api/otp/status",
+      httpMethod: "put",
+      params: {
+        userid: "",
+        newStatus: ""
+      }
     }
   ];
 
@@ -33,6 +42,8 @@ const StandardEventsSection = () => {
     const fetchEvents = async () => {
       if (hasAttemptedFetch.current) {
         setStandardEvents(defaultEvents);
+        // 即使使用默认数据也要保存到localStorage
+        localStorage.setItem('standardEvents', JSON.stringify(defaultEvents));
         return;
       }
 
@@ -56,25 +67,31 @@ const StandardEventsSection = () => {
         // 确保每个事件对象都有必要的属性
         const validatedData = data.map(event => {
           const validatedEvent = {
-            id: event.id || Math.random().toString(36).substr(2, 9),
-            eventName: event.eventName || '未命名事件',
+            name: event.name || event.eventName || '未命名事件',
             description: event.description || '',
-            parameters: event.parameters || ''
+            tag: event.tag || '',
+            httpUrl: event.httpUrl || '',
+            httpMethod: event.httpMethod || 'get',
+            params: event.params || { userid: '' }
           };
 
           // 记录数据转换过程
-          if (event.id !== validatedEvent.id ||
-            event.eventName !== validatedEvent.eventName ||
+          if (event.name !== validatedEvent.name ||
             event.description !== validatedEvent.description ||
-            event.parameters !== validatedEvent.parameters) {
+            event.tag !== validatedEvent.tag ||
+            event.httpUrl !== validatedEvent.httpUrl ||
+            event.httpMethod !== validatedEvent.httpMethod ||
+            JSON.stringify(event.params) !== JSON.stringify(validatedEvent.params)) {
             console.log('事件数据补充:', {
               原始数据: event,
               处理后数据: validatedEvent,
               补充的字段: {
-                id: event.id ? '未变更' : '已生成新ID',
-                eventName: event.eventName ? '未变更' : '已设为默认值',
+                name: event.name ? '未变更' : '已设为默认值',
                 description: event.description ? '未变更' : '已设为空字符串',
-                parameters: event.parameters ? '未变更' : '已设为空字符串'
+                tag: event.tag ? '未变更' : '已设为空字符串',
+                httpUrl: event.httpUrl ? '未变更' : '已设为空字符串',
+                httpMethod: event.httpMethod ? '未变更' : '已设为get',
+                params: event.params ? '未变更' : '已设为默认参数'
               }
             });
           }
@@ -84,6 +101,8 @@ const StandardEventsSection = () => {
 
         console.log('数据验证后的结果:', JSON.stringify(validatedData, null, 2));
         setStandardEvents(validatedData);
+        // 保存验证后的数据到localStorage
+        localStorage.setItem('standardEvents', JSON.stringify(validatedData));
         showToast('标准事件库加载成功', 'success');
       } catch (error) {
         console.group('标准事件库加载错误');
@@ -96,6 +115,8 @@ const StandardEventsSection = () => {
         }
         console.groupEnd();
         setStandardEvents(defaultEvents);
+        // 即使使用默认数据也要保存到localStorage
+        localStorage.setItem('standardEvents', JSON.stringify(defaultEvents));
         showToast(error.message || '标准事件库加载失败，使用默认数据', 'error', 5000);
       } finally {
         setIsLoading(false);
@@ -106,10 +127,17 @@ const StandardEventsSection = () => {
     fetchEvents();
   }, [showToast]);
 
+  // 监听标准事件的变化，自动更新localStorage
+  useEffect(() => {
+    if (standardEvents.length > 0) {
+      localStorage.setItem('standardEvents', JSON.stringify(standardEvents));
+    }
+  }, [standardEvents]);
+
   // 搜索过滤逻辑
   const filteredEvents = standardEvents.filter(event => {
-    // 确保事件对象有 eventName 属性
-    const eventName = event?.eventName || '';
+    // 确保事件对象有 name 属性
+    const eventName = event?.name || '';
     return eventName.toLowerCase().includes(searchText.toLowerCase());
   });
 
@@ -184,10 +212,10 @@ const StandardEventsSection = () => {
           <div className={styles.loading}>加载中...</div>
         ) : (
           filteredEvents.map((event) => (
-            <div key={`standard-${event.id}`}>
+            <div key={`standard-${event.httpUrl}`}>
               <ActionButton
-                text={event.eventName}
-                title={`${event.description}${event.parameters ? `\n参数: ${event.parameters}` : ''}`}
+                text={event.name}
+                title={`${event.description}${event.params ? `\n参数: ${JSON.stringify(event.params)}` : ''}`}
                 type="standard"
               />
             </div>

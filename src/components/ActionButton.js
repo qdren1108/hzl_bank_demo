@@ -26,36 +26,25 @@ const ActionButton = ({ text, title, type = '', onEventSaved }) => {
   const isStandardEvent = type === 'standard';
 
   // 处理事件执行
-  const handleEventExecution = async (eventName, parameters) => {
+  const handleEventExecution = async (eventName, eventData) => {
     try {
-      // 构建完整的事件数据结构
+      // 使用传入的事件数据构建请求体
       const requestBody = {
-        id: 1,
-        eventName: eventName,
-        description: "ユーザOTP開始",
-        pevents: [
-          {
-            id: 1,
-            eventName: "OTP検索",
-            description: "ユーザOTP検索",
-            parameters: parameters['OTP検索']?.usrid || '',
-            pevents: "/bank/transfer"
-          },
-          {
-            id: 2,
-            eventName: "OTP更新",
-            description: "ユーザOTP更新",
-            parameters: parameters['OTP更新']?.usrid || '',
-            pevents: "/bank/transfer"
-          }
-        ],
-        timestamp: new Date().toISOString()
+        name: eventName,
+        description: eventData.description || "ユーザOTP開始",
+        events: eventData.events.map(event => ({
+          ...event,
+          params: event.params || {}
+        }))
       };
 
+      console.log('执行事件请求体:', JSON.stringify(requestBody, null, 2));
+
+      // 调用执行API
       await executeEventApi(requestBody);
       showToast('事件执行成功', 'success', 3000);
 
-      // 执行成功后再触发显示事件
+      // 显示在聊天窗口
       showEventInChat(eventName);
     } catch (error) {
       console.error('事件执行失败:', error);
@@ -104,13 +93,27 @@ const ActionButton = ({ text, title, type = '', onEventSaved }) => {
   const handleParameterConfirm = (parameters) => {
     // 检查是否是从个人事件库执行
     const eventCompositions = JSON.parse(localStorage.getItem('eventCompositions') || '{}');
-    const savedEvent = eventCompositions[text];
+    const bankEvents = JSON.parse(localStorage.getItem('bankEvents') || '[]');
+    const bankEvent = bankEvents.find(event => event.name === text);
 
-    // 如果是已保存的事件，使用保存的参数
-    const paramsToUse = savedEvent?.parameters || parameters;
+    if (bankEvent) {
+      // 如果是银行事件，更新每个子事件的参数
+      const updatedEvents = bankEvent.events.map(event => ({
+        ...event,
+        params: parameters[event.name] || event.params
+      }));
 
-    // 执行事件
-    handleEventExecution(text, paramsToUse);
+      // 执行事件
+      handleEventExecution(text, {
+        ...bankEvent,
+        events: updatedEvents
+      });
+    } else {
+      // 如果是个人事件，使用保存的参数
+      const savedEvent = eventCompositions[text];
+      const paramsToUse = savedEvent?.parameters || parameters;
+      handleEventExecution(text, paramsToUse);
+    }
 
     // 在Chat中显示事件
     console.log('Action按钮点击:', text);
